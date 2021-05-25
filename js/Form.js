@@ -38,10 +38,10 @@ class Form {
       player.updateCount(0);
       database.ref("players").remove();
       database.ref("allQuestions").remove();
-      game.updateRound(1);
       Player.updateCarsAtEnd(0);
-      game.updateCounter(10);
-      game.updateRound();
+      game.updateCounter(0);
+
+      game.updateRound(1);
     });
   }
 }

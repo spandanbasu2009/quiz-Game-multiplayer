@@ -1,39 +1,29 @@
 class Game {
   constructor() {
-    this.round = 1;
-    this.maxPlayers = 15;
-    this.minPlayers = 5;
-    this.totalQuestions = 10;
-    this.questionWait = 10;
-    this.answerWait = 10;
+    this.maxPlayers = 10;
+    this.minPlayers = 2;
+    this.totalQuestions = 5;
+    this.questionWait = 5;
+    this.answerWait = 5;
+    this.waitTime = 15;
     this.questionNumber = 0;
     this.currentQuestion = null;
-    this.allQuestions = [];
+    this.allQuestions = null;
     this.difficulty = "easy";
-    this.gameMode = "i";
     this.answerOptions = createRadio();
     this.questionEle = createElement("h2");
     this.roundPlayers = 0;
-  }
-  updateServerTime() {
-    var sessionsRef = firebase.database().ref("sessions");
-    sessionsRef.push({
-      startedAt: firebase.database.ServerValue.TIMESTAMP,
-    });
+    this.messageEle = createElement("h2");
+    this.maxRound = 3;
+    this.playerScores = [];
   }
 
-  getServerTime() {
-    database.ref("startedAt").on("value", function (data) {
-      timer = data.val();
-    });
-  }
   getState() {
     var gameStateRef = database.ref("gameState");
     gameStateRef.on("value", function (data) {
       gameState = data.val();
     });
   }
-
   update(state) {
     database.ref("/").update({
       gameState: state,
@@ -42,26 +32,26 @@ class Game {
   getCounter() {
     var gameStateRef = database.ref("counter");
     gameStateRef.on("value", function (data) {
-      wcounter = data.val();
+      counter = data.val();
     });
   }
-
   updateCounter(ctr) {
     database.ref("/").update({
       counter: ctr,
     });
   }
-  getRound() {
-    var gameStateRef = database.ref("round");
-    gameStateRef.on("value", (data) => {
-      this.round = data.val();
-    });
-  }
-  updateRound(rnd) {
-    database.ref("/").update({
-      round: rnd,
-    });
-  }
+
+  // getRound() {
+  //   var gameStateRef = database.ref("round");
+  //   gameStateRef.on("value", (data) => {
+  //     this.round = data.val();
+  //   });
+  // }
+  // updateRound(rnd) {
+  //   database.ref("/").update({
+  //     round: rnd,
+  //   });
+  // }
   getQuestionNumber() {
     var gameStateRef = database.ref("questionNumber");
     gameStateRef.on("value", function (data) {
@@ -69,7 +59,7 @@ class Game {
     });
   }
 
-  async getQuestion(num, level) {
+  async getQuestionAPI(num, level) {
     var tokenref = await fetch(
       "https://opentdb.com/api_token.php?command=request"
     );
@@ -77,7 +67,6 @@ class Game {
     var tokenJSON = await tokenref.json();
 
     token = tokenJSON.token;
-    console.log(token);
 
     var url =
       "https://opentdb.com/api.php?amount=" +
@@ -86,6 +75,7 @@ class Game {
       level +
       "&type=multiple&token=" +
       token;
+
     var response = await fetch(url);
 
     var responseJSON = await response.json();
@@ -93,41 +83,37 @@ class Game {
     if (responseJSON.response_code == 4) {
       fetch("https://opentdb.com/api_token.php?command=reset&token=" + token);
     }
-    //console.log(responseJSON);
-    this.allQuestions = responseJSON.results;
+    var allQuestions = responseJSON.results;
 
     database.ref("/").update({
-      allQuestions: this.allQuestions,
+      allQuestions: allQuestions,
+    });
+  }
+  async getQuestion() {
+    var gameStateRef = await database.ref("allQuestions");
+
+    gameStateRef.on("value", (data) => {
+      this.allQuestions = data.val();
     });
   }
 
   async getSingleQuestion(count) {
     clear();
-    console.log("get single q");
-    while (this.currentQuestion == null) {
-      var gameStateRef = await database.ref("allQuestions/" + [count - 1]);
 
-      var currentQuestionRef = await gameStateRef.once("value");
-      if (currentQuestionRef.exists()) {
-        this.currentQuestion = currentQuestionRef.val();
-      }
-    }
-
+    this.currentQuestion = this.allQuestions[count - 1];
     if (this.currentQuestion) {
       answersArray = [
         this.currentQuestion.correct_answer,
         ...this.currentQuestion.incorrect_answers,
       ];
-      console.log(answersArray);
 
       answersArray = this.shuffleArray(answersArray);
-      console.log(answersArray);
 
       this.answerOptions.hide();
       this.answerOptions = createRadio();
-
+      this.questionEle.show();
       this.questionEle.html(
-        (this.questionNumber+1) + ". " + this.currentQuestion.question
+        this.questionNumber + 1 + ". " + this.currentQuestion.question
       );
       this.questionEle.position(
         displayWidth / 2 - 350,
@@ -162,83 +148,83 @@ class Game {
   }
   play() {
     form.hide();
-    this.getRound();
     //clear();
-    this.displayScores(displayWidth - 500, 100, 15);
+    textAlign(CENTER);
+    this.displayScores(displayWidth - 500, 100, 15, this.playerScores);
     textSize(30);
-    text("Round " + this.round, width / 2, height / 2 - 300);
-    if (this.gameMode == "i") {
+    text("Round " + player.round, width / 2, height / 2 - 300);
+    if (gameMode == "i") {
       this.initialize();
     }
-    if (this.gameMode == "q") {
+    if (gameMode == "q") {
       this.displayQuestion();
     }
-    if (this.gameMode == "w") {
+    if (gameMode == "w") {
       this.wait();
     }
-    if (this.gameMode == "a") {
+    if (gameMode == "a") {
       this.displayAnswer();
     }
-    if (this.gameMode == "rchange") {
+    if (gameMode == "rchange" || gameMode == "rchangedone") {
       // //eliminate players
       this.roundChange();
     }
   }
 
   initialize() {
-    if (player.index == 1) {
-      console.log("get q");
-      this.getQuestion(this.totalQuestions, this.difficulty);
+    this.questionEle.hide();
+    clear();
+
+    text("Loading Questions", width / 2, height / 2);
+    //var rand = Math.round(random(1, playerCount));
+    if (this.allQuestions == null && player.index == 1) {
+      this.getQuestionAPI(this.totalQuestions, this.difficulty);
     }
-    if (this.round == 1) {
+    this.getQuestion();
+    if (player.round == 1) {
       this.gameRound1();
-    } else if (this.round == 2) {
+    } else if (player.round == 2) {
       this.gameRound2();
-    } else if (this.round == 3) {
-      this.game.round3();
+    } else if (player.round == 3) {
+      this.gameRound3();
+    } else if (player.round > this.maxRound) {
+      this.end();
     }
 
     this.currentQuestion = null;
 
-    this.gameMode = "q";
+    gameMode = "q";
   }
   displayQuestion() {
-    //getQ = true;
-    if (this.currentQuestion == null) {
-      this.getSingleQuestion(this.questionNumber+1);
-      this.loadingQuestion();
+    if (this.allQuestions) {
+      clear();
+
+      this.getSingleQuestion(this.questionNumber + 1);
     }
     if (this.currentQuestion) {
       this.questionNumber++;
 
-      qcounter = this.questionWait;
-      qtimer = setInterval(function () {
-        qcounter--;
-      }, 1000);
-      this.gameMode = "w";
+      qcounter = counter + this.questionWait;
+      //game.updateQCounter(this.questionWait);
+
+      gameMode = "w";
     }
   }
-
-  loadingQuestion(){
-     textSize(30);
-     textAlign(CENTER);
-     text("Loading next question",width/2,height/2);
-  }
-
   wait() {
     if (this.currentQuestion) {
       textSize(30);
-
       textAlign(CENTER);
-      text("Answer in " + qcounter + " secs", width / 2, height / 2);
+      text(
+        "Answer in " + (qcounter + this.questionWait - counter) + " secs",
+        width / 2,
+        height / 2
+      );
       givenAnswer = this.answerOptions.value();
-      if (qcounter <= 0) {
-        this.gameMode = "a";
-        clearInterval(qtimer);
-        acounter = this.answerWait;
-        atimer = setInterval(function () {
-          acounter--;
-        }, 1000);
+      if (counter >= qcounter + this.questionWait) {
+        gameMode = "a";
+        acounter = counter + this.answerWait;
+
+        // game.updateACounter(this.answerWait);
       }
     }
   }
@@ -250,87 +236,117 @@ class Game {
     } else {
       text("You Got That Wrong", width / 2, height / 2 + 50);
     }
-    text(
-      this.currentQuestion.correct_answer + " is the Correct Answer",
-      width / 2,
-      height / 2 + 100
-    );
-    text("Next Question in " + acounter + " secs", width / 2, height / 2 + 150);
 
-    if (acounter == 0) {
-      this.gameMode = "q";
-      clearInterval(atimer);
-      if (givenAnswer == this.currentQuestion.correct_answer) {
+    this.messageEle.show();
+
+    this.messageEle.html(
+      this.currentQuestion.correct_answer + " is the Correct Answer"
+    );
+    this.messageEle.position(width / 2, height / 2 + 100);
+    text(
+      "Next Question in " + (this.answerWait + acounter - counter) + " secs",
+      width / 2,
+      height / 2 + 250
+    );
+
+    if (counter >= acounter + this.answerWait) {
+      gameMode = "q";
+      this.messageEle.hide();
+
+      if (givenAnswer == this.currentQuestion.correct_answer && player.active) {
         player.score += 10;
         player.update();
       }
-      if (this.questionNumber === this.totalQuestions-1) {
-        var num = this.round + 1;
-        this.updateRound(num);
-        this.gameMode = "rchange";
-        clearInterval(atimer);
-        wcounter = 10;
-        wtimer = setInterval(function () {
-          var ctr = wcounter - 1;
-          game.updateCounter(ctr);
-        }, 1000);
+      if (this.questionNumber == this.totalQuestions) {
+        player.round++;
+        player.update();
+        gameMode = "rchange";
+        this.questionEle.hide();
+
+        //updateCounter(10);
+        wcounter = this.waitTime + counter;
       }
       this.currentQuestion = null;
     }
   }
   roundChange() {
-    this.roundPlayers = this.maxPlayers;
-    for (var plr in allPlayers) {
-      console.log(playerScores);
-      if (allPlayers[plr].index) {
-        playerScores = [
-          ...[
-            allPlayers[plr].name,
-            allPlayers[plr].score,
-            allPlayers[plr].index,
-          ],
-        ];
+    if (gameMode == "rchange") {
+      if (rounds === true) {
+        gameMode = "rchangedone";
       }
-    }
-    playerScores.sort((a, b) => {
-      b[1] - a[1];
-    });
-    for (var i = this.roundPlayers; i < playerScores.length; i++) {
-      if (player.index == playerScores[i][2]) {
-        player.index = null;
-        player.update();
+      rounds = true;
+
+      var index = 0;
+      for (var plr in allPlayers) {
+        index++;
+        if (allPlayers[plr].round != player.round) {
+          text(
+            "Waiting for " +
+              allPlayers[plr].name +
+              " to finish round " +
+              allPlayers[plr].round,
+            width / 2,
+            index * 100
+          );
+          rounds = false;
+        }
       }
-    }
-    //reassign player index
-    for (var i = 0; i < this.roundPlayers - 1; i++) {
-      if (player.index == playerScores[i][2]) {
-        player.index = i;
-        player.update();
+    } else if (gameMode === "rchangedone") {
+      clear();
+      this.roundPlayers = this.maxPlayers;
+      this.currentQuestion = "";
+      database.ref("allQuestions").remove();
+      if (counter >= wcounter + this.waitTime - counter) {
+        var playerScores = [];
+        for (var plr in allPlayers) {
+          if (allPlayers[plr].index && allPlayers[plr].active) {
+            playerScores.push([
+              allPlayers[plr].name,
+              allPlayers[plr].score,
+              allPlayers[plr].index,
+            ]);
+          }
+        }
+        this.playerScores = playerScores;
+        this.playerScores.sort((a, b) => {
+          b[1] - a[1];
+        });
+        if (player.round <= game.maxRound) {
+          gameMode = "i";
+
+          var roundPlayers = min(playerCount, this.roundPlayers);
+
+          for (var i = roundPlayers; i < this.playerScores.length; i++) {
+            if (player.index == this.playerScores[i][2] && player.active) {
+              player.active = false;
+              player.update();
+            }
+          }
+
+          text("Round " + player.round, width / 2, height / 2 - 50);
+        } else {
+          gameState = 2;
+        }
       }
-    }
-    text("Round " + this.round, width / 2, height / 2 - 100);
-    this.displayScores(width / 2, height / 2, 50);
-    if (rcounter <= 0) {
-      clearInterval(rtimer);
-      this.gameMode = "i";
-      this.allQuestions = [];
+      this.displayScores(width / 2, height / 2, 50, this.playerScores);
     }
   }
+
   gameRound1() {
     this.maxPlayers = 15;
-    this.minPlayers = 5;
-    this.totalQuestions = 10;
-    this.questionWait = 10;
-    this.answerWait = 10;
+    this.minPlayers = 2;
+    this.totalQuestions = 3;
+    this.questionWait = 5;
+    this.answerWait = 5;
     this.questionNumber = 0;
     this.difficulty = "easy";
   }
   gameRound2() {
     this.maxPlayers = 4;
     this.minPlayers = 4;
-    this.totalQuestions = 10;
-    this.questionWait = 10;
-    this.answerWait = 10;
+    this.totalQuestions = 3;
+    this.questionWait = 5;
+    this.answerWait = 5;
     this.questionNumber = 0;
 
     this.difficulty = "easy";
@@ -338,34 +354,45 @@ class Game {
   gameRound3() {
     this.maxPlayers = 2;
     this.minPlayers = 2;
-    this.totalQuestions = 10;
-    this.questionWait = 10;
-    this.answerWait = 10;
+    this.totalQuestions = 3;
+    this.questionWait = 5;
+    this.answerWait = 5;
     this.questionNumber = 0;
 
     this.difficulty = "easy";
   }
-  displayScores(x, y, size) {
+  displayScores(x, y, size, arr) {
     Player.getPlayerInfo();
     if (allPlayers !== undefined) {
       textSize(size);
       fill(255);
+      if (gameMode != "rchange") {
+        for (var plr in allPlayers) {
+          y = y + 30;
 
-      var index = 0;
-
-      for (var plr in allPlayers) {
-        index = index + 1;
-
-        y = y + 30;
-
-        if (index === player.index) {
-          fill("green");
-        } else if (player.index == "") {
-          fill("grey");
-        } else {
-          fill("black");
+          if (!allPlayers[plr].active) {
+            fill("grey");
+          } else if (allPlayers[plr].index === player.index) {
+            fill("green");
+          } else {
+            fill("black");
+          }
+          text(allPlayers[plr].name + ": " + allPlayers[plr].score, x, y);
         }
-        text(allPlayers[plr].name + ": " + allPlayers[plr].score, x, y);
+      } else {
+        // var arr=this.playerScores
+        for (var i = 0; i < arr.length; i++) {
+          y = y + 30;
+
+          if (!arr[i].active) {
+            fill("grey");
+          } else if (arr[i].index === player.index) {
+            fill("green");
+          } else {
+            fill("black");
+          }
+          text(arr[i].name + ": " + arr[i].score, x, y);
+        }
       }
     }
   }
@@ -377,6 +404,40 @@ class Game {
     return arr;
   }
   end() {
-    console.log("Game Ended");
+    clear();
+    text("Game Over!", width / 2, height / 2 - 200);
+    this.displayScores(width / 2, height / 2, 50, this.playerScores);
+    clear();
+    console.log(this.playerScores);
+    this.playerScores.sort((a, b) => {
+      b[1] - a[1];
+    });
+    console.log(this.playerScores);
+    if (player.index == this.playerScores[0][2]) {
+      text(
+        "Congratulations!" +
+          this.playerScores[0][0] +
+          "You are the Winner of this Game",
+        width / 2,
+        height / 2 - 200
+      );
+    } else {
+      text(
+        "Sorry you lost!" + this.playerScores[0][0] + "is the Winner",
+        width / 2,
+        height / 2 - 200
+      );
+    }
+    this.restart = createButton("Play Again");
+    this.restart.position(width / 2, height / 2 + 100);
+    this.restart.mousePressed(() => {
+      game.update(0);
+      player.updateCount(0);
+      database.ref("players").remove();
+      database.ref("allQuestions").remove();
+      game.updateCounter(0);
+
+      game.updateRound(1);
+    });
   }
 }
