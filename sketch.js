@@ -17,10 +17,10 @@ var acounter,
   rcounter,
   wtimer,
   counter = 10;
-var gameMode = "i";
+var gameMode = "cc";
 var timer;
-var rounds;
-
+var rounds = false;
+var colorChoice,colorArray=[];
 var form, player, game;
 
 function setup() {
@@ -34,7 +34,9 @@ function setup() {
 
 function draw() {
   background(rgb(198, 135, 103));
-
+  textAlign(CENTER);
+  fill(0);
+  textSize(15);
   if (playerCount === game.minPlayers && gameState == 0) {
     gameState = -1;
     game.update(-1);
@@ -45,7 +47,9 @@ function draw() {
   }
   if (gameState == -1) {
     text(
-      "waiting for more players to join in the next " + counter + " seconds",
+      "waiting for more players to join in the next " +
+        (game.waitTime - counter) +
+        " seconds",
       width / 2,
       height / 2
     );

@@ -4,7 +4,8 @@ class Player {
     this.name = null;
     this.score = 0;
     this.active = true;
-    this.round = 1;
+    this.round = 0;
+    this.color = "";
   }
 
   getCount() {
@@ -27,6 +28,7 @@ class Player {
       index: this.index,
       active: this.active,
       round: this.round,
+      color: this.color,
     });
   }
   updateTime(counter, ans) {
